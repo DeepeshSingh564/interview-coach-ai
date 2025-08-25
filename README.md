@@ -28,6 +28,7 @@ It generates AI-powered interview questions, allows users to record answers, and
 
 ## ⚙️ Installation
 
-1. **Clone the repo:**
+1. **Clone the repo**
    ```bash
    git clone https://github.com/YOUR-USERNAME/interview-ai-coach.git
+   cd interview-ai-coach
