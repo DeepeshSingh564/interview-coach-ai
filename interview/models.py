@@ -39,6 +39,8 @@ class Attempt(models.Model):
     answer_text = models.TextField()
     feedback_text = models.TextField(blank=True)
     score = models.IntegerField(default=0)
+    ai_feedback= models.JSONField(null=True, blank=True)
+    raw_ai_response = models.TextField(blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     
     def __str__(self):

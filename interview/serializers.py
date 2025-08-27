@@ -20,4 +20,4 @@ class AnswerSubmissionSerializer(serializers.Serializer):
 class AttemptSerializer(serializers.ModelSerializer):
     class Meta:
         model = Attempt
-        fields = ['id', 'score', 'feedback_text', 'user_session', 'created_at']
+        fields = ['id', 'score', 'feedback_text', 'user_session', 'created_at','ai_feedback']
