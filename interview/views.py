@@ -9,7 +9,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 
-from .models import Role, Question, Attempt
+from .models import Role, Question, Attempt, Session
 from .feedback_engine import score_answer
 from .serializers import RoleSerializer, QuestionSerializer, AnswerSubmissionSerializer, AttemptSerializer
 from .ai_engine import ai_evaluate_answer

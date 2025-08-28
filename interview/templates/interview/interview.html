@@ -30,32 +30,60 @@
 </div>
 
 <script>
-let currentIndex = 0;
 let questions = [];
-let sessionId = "{{ role.id }}-" + Date.now();
-let roleId = "{{ role.id }}";
+let currentIndex = 0;
 let attempts = [];
+let roleId = {{ role.id }};
+let sessionId = null;
+
+async function startSession() {
+    try {
+        let res = await fetch("/api/session/start", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                role_id: roleId
+            })
+        });
+
+        if (!res.ok) {
+            let errorText = await res.text();
+            console.error("Error starting session:", errorText);
+            alert("Error starting session. See console for details.");
+            return false;
+        }
+
+        let sessionData = await res.json();
+        sessionId = sessionData.session_id;
+        console.log("Session started:", sessionData);
+        return true;
+    } catch (error) {
+        console.error("Error starting session:", error);
+        alert("Error starting session");
+        return false;
+    }
+}
 
 // Fetch questions from backend
 async function loadQuestions() {
-    let res = await fetch(`/api/questions/${roleId}/`);
-
-    if (!res.ok) {
-        let errorText = await res.text(); // Capture the raw error text
-        console.error("Error loading questions:", errorText);
-        alert("Error loading questions. See console for details.");
-        return; // Stop further execution on error
+    // Start session first
+    let sessionStarted = await startSession();
+    if (!sessionStarted) {
+        return;
     }
 
-    const response = await res.json();
+    let res = await fetch(`/api/questions/${roleId}/`);
+    if (!res.ok) {
+        let errorText = await res.text();
+        console.error("Error loading questions:", errorText);
+        alert("Error loading questions. See console for details.");
+        return;
+    }
 
-        // Check the structure of the response
-    console.log("Raw API Response:", response);
-        // Assuming your server returns questions in response.questions
-    questions = response.questions || []; // Ensure it's an array or fall back to an empty array
-    console.log("Fetched Questions:", questions); // Log the fetched questions to confirm
-
-    showQuestion(); // Call to display the first question
+    let data = await res.json();
+    questions = data.questions; // Extract questions array from response
+    console.log("Fetched Questions:", questions);
+    showQuestion();
 }
 
 // Show current question
@@ -66,8 +94,8 @@ function showQuestion() {
         return;
     }
 
-    console.log("Current Index:", currentIndex); 
-    console.log("Questions Length:", questions.length); 
+    console.log("Current Index:", currentIndex);
+    console.log("Questions Length:", questions.length);
 
     if (currentIndex < questions.length) {
         document.getElementById("question-text").innerText = questions[currentIndex].text; // Ensure text is accessed correctly
@@ -85,20 +113,30 @@ function showQuestion() {
           return;
       }
 
+      if (!sessionId) {
+          alert("Session not started. Please refresh the page.");
+          return;
+      }
+
       const questionId = questions[currentIndex].id;
+      console.log("Submitting answer with:", {
+          session_id: sessionId,
+          question_id: questionId,
+          answer_text: answer
+      });
 
       let res = await fetch("/api/answer/", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
+              session_id: sessionId,
               question_id: questionId,
-              answer_text: answer,
-              user_session: sessionId
+              answer_text: answer
           })
       });
 
       if (!res.ok) {
-          let text = await res.text();  // print raw HTML error
+          let text = await res.text();
           console.error("Server error:", text);
           alert("Error from server: " + res.status);
           return;
