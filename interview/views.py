@@ -18,13 +18,16 @@ from .feedback_engine import score_answer
 # Create your views here.
 
 def home_view(request):
-    roles = Role.objects.all()
+    roles = Role.objects.all().values('id', 'name', 'slug')
+    print("Roles in home_view:", list(roles))  # Debug line
     return render(request, "interview/home.html", {"roles": roles})
 
 
 
-def interview_view(request,role_id):
-    role = get_object_or_404(Role, id=role_id)  # default to 1 if missing
+def interview_view(request, role_id):
+    print(f"interview_view called with role_id: {role_id}")  # Debug line
+    role = get_object_or_404(Role, id=role_id)
+    print(f"Found role: {role.name}")  # Debug line
     return render(request, "interview/interview.html", {"role": role})
 
 

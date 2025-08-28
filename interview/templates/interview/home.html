@@ -6,8 +6,8 @@
 
   <div class="list-group">
     {% for role in roles %}
-      <a href="{% url 'interview' role.id %}" class="list-group-item list-group-item-action">
-        {{ role.name }}
+      <a href="{% url 'interview' role.id %}" class="list-group-item list-group-item-action" onclick="console.log('Clicked role:', {{ role.id }})">
+        {{ role.name }} (ID: {{ role.id }})
       </a>
     {% empty %}
       <p class="text-muted">No roles available yet. Please add some in the admin panel.</p>
