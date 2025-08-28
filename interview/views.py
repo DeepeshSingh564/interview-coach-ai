@@ -33,6 +33,7 @@ def api_roles(request):
   roles = list(Role.objects.order_by('name').values('id', 'name', 'slug'))
   return JsonResponse({'roles': roles})
 
+@csrf_exempt
 @require_GET
 def api_questions(request, role_id):
     questions = list(Question.objects.filter(role_id=role_id).values('id', 'text', 'difficulty', 'keywords'))
@@ -146,6 +147,7 @@ def api_answer_browsable(request):
         }, status=status.HTTP_201_CREATED)
 
 
+@csrf_exempt
 @require_POST
 def api_start_session(request):
     try:
