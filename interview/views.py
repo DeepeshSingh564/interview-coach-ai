@@ -3,6 +3,7 @@ import json
 import secrets
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_GET, require_POST
+from django.shortcuts import render, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -16,13 +17,16 @@ from .feedback_engine import score_answer
 
 # Create your views here.
 
-def home(request):
-  roles=Role.objects.all()
-  return render(request, 'interview/home.html', {'roles': roles})
+def home_view(request):
+    roles = Role.objects.all()
+    return render(request, "interview/home.html", {"roles": roles})
 
-def interview_page(request):
-    roles = Role.objects.order_by("name")
-    return render(request, "interview/interview.html", {"roles": roles})
+
+
+def interview_view(request,role_id):
+    role = get_object_or_404(Role, id=role_id)  # default to 1 if missing
+    return render(request, "interview/interview.html", {"role": role})
+
 
 @require_GET
 def api_roles(request):
@@ -30,76 +34,54 @@ def api_roles(request):
   return JsonResponse({'roles': roles})
 
 @require_GET
-def api_question(request):
-  role_id = request.GET.get('role_id')
-  if not role_id:
-    return HttpResponseBadRequest("role_id is required")
-  q=Question.objects.filter(role_id=role_id).order_by('?').first()
-  if not q:
-    return JsonResponse({'question' : None})
-  return JsonResponse({
-    'question':{
-      'id': q.id,
-      'text': q.text,
-      'difficulty': q.difficulty,
-      'keywords': q.keywords,
-    }
-  })  
+def api_questions(request, role_id):
+    questions = list(Question.objects.filter(role_id=role_id).values('id', 'text', 'difficulty', 'keywords'))
+    return JsonResponse({'questions': questions})  # Now returns a list of questions
 
-@csrf_exempt  # OK for dev; remove later with proper CSRF
+
+@csrf_exempt  # This should be removed once the frontend is using CSRF tokens
 @require_POST
 def api_answer(request):
     try:
-        payload = json.loads(request.body.decode('utf-8'))
-        question_id = payload['question_id']
-        answer_text = payload['answer_text']
-        user_session = payload.get('user_session') or secrets.token_hex(8)
-    except Exception:
-        return HttpResponseBadRequest("Invalid JSON")
+        payload = json.loads(request.body.decode("utf-8"))
+        session_id = payload.get("session_id")
+        question_id = payload.get("question_id")
+        answer_text = payload.get("answer_text")
 
+        # Validation of the incoming data
+        if session_id is None or question_id is None or answer_text is None:
+            return HttpResponseBadRequest("Missing required fields.")
+
+    except json.JSONDecodeError:
+        return HttpResponseBadRequest("Invalid JSON format.")
+
+    # Get session
     try:
-        q = Question.objects.get(id=question_id)
+        session = Session.objects.get(id=session_id)
+    except Session.DoesNotExist:
+        return HttpResponseBadRequest("Invalid session_id")
+    # Get question
+    try:
+        question = Question.objects.get(id=question_id)
     except Question.DoesNotExist:
         return HttpResponseBadRequest("Invalid question_id")
-
-    # Default: rule-based scoring (free)
-    use_ai = payload.get("use_ai", False)
-
-    if use_ai:
-        # Try AI evaluation
-        try:
-            from .ai_engine import ai_evaluate_answer
-            result = ai_evaluate_answer(q.text, answer_text)
-
-            score = result.get("score", 0)
-            fb = (
-                f"Strengths: {', '.join(result.get('strengths', []))}\n"
-                f"Weaknesses: {', '.join(result.get('weaknesses', []))}\n"
-                f"Improvements: {', '.join(result.get('improvements', []))}"
-            )
-        except Exception as e:
-            # Fall back to rule-based if AI fails
-            score, fb = score_answer(answer_text, q.keywords or [])
-    else:
-        # Use local feedback engine
-        score, fb = score_answer(answer_text, q.keywords or [])
-
-    # Save attempt in DB
+    # Call AI to evaluate
+    result = ai_evaluate_answer(question.text, answer_text)
+    # Store attempt
     attempt = Attempt.objects.create(
-        question=q,
-        user_session=user_session,
+        session=session,
+        question=question,
+        user_session=session.user_session,  # keep for reference
         answer_text=answer_text,
-        feedback_text=fb,
-        score=score,
+        feedback_text=result.get("feedback", ""),
+        score=result.get("score", 0),
     )
-
     return JsonResponse({
-        'attempt_id': attempt.id,
-        'score': score,
-        'feedback': fb,
-        'user_session': user_session
+        "attempt_id": attempt.id,
+        "session_id": session.id,
+        "score": attempt.score,
+        "feedback": attempt.feedback_text,
     })
-
 
 @api_view(['GET', 'POST'])
 def api_answer_browsable(request):
@@ -163,6 +145,52 @@ def api_answer_browsable(request):
             'attempt_details': result_serializer.data
         }, status=status.HTTP_201_CREATED)
 
+
+@require_POST
+def api_start_session(request):
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+        role_id = payload["role_id"]
+
+    except Exception:
+        return HttpResponseBadRequest("Invalid JSON")
+
+    role = Role.objects.get(id=role_id)
+    session = Session.objects.create(
+        user_session=secrets.token_hex(8),
+        role=role
+    )
+    return JsonResponse({
+        "session_id": session.id,
+        "user_session": session.user_session,
+        "role": role.name
+    })
+
+
+@require_GET
+def api_session_summary(request, session_id):
+    try:
+        session = Session.objects.get(id=session_id)
+    except Session.DoesNotExist:
+        return HttpResponseBadRequest("Invalid session_id")
+
+    attempts = session.attempts.all()
+    avg_score = attempts.aggregate(models.Avg("score"))["score__avg"] or 0
+
+    return JsonResponse({
+        "session_id": session.id,
+        "role": session.role.name,
+        "started_at": session.started_at,
+        "ended_at": session.ended_at,
+        "attempts": [
+            {
+                "question": a.question.text,
+                "score": a.score,
+                "feedback": a.feedback_text,
+            } for a in attempts
+        ],
+        "average_score": avg_score
+    })
 
 
   

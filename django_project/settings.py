@@ -29,7 +29,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = os.environ["REPLIT_DOMAINS"].split(',')
 CSRF_TRUSTED_ORIGINS = [
-    "https://" + domain for domain in os.environ["REPLIT_DOMAINS"].split(',')
+    "https://" + domain for domain in os.environ["REPLIT_DOMAINS"].split(',')]+[
+    "https://*.pike.replit.dev",
+    "https://*.pike.replit.dev:5000",
 ]
 
 # Application definition
@@ -53,6 +55,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
 ]
+
+# settings.py
+
+
+
 
 # Only use clickjacking protection in deployments because the Development Web View uses
 # iframes and needs to be a cross origin.

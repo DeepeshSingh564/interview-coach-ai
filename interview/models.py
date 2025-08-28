@@ -33,8 +33,21 @@ class Question(models.Model):
     class Meta:
         ordering = ['-created_at']
 
+
+class Session(models.Model):
+    user_session = models.CharField(max_length=100, unique=True)
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="sessions")
+    started_at = models.DateTimeField(default=timezone.now)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Session {self.id} for {self.role.name} ({self.user_session})"
+
+
+
 class Attempt(models.Model):
-    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='attempts')
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name="attempts")
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name="attempts")
     user_session = models.CharField(max_length=100)
     answer_text = models.TextField()
     feedback_text = models.TextField(blank=True)
@@ -48,3 +61,5 @@ class Attempt(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+
+
