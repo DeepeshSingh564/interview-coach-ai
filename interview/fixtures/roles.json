@@ -1,0 +1,6 @@
+[
+  { "model": "interview.role", "pk": 1, "fields": { "name": "Frontend Developer", "slug": "frontend-developer" } },
+  { "model": "interview.role", "pk": 2, "fields": { "name": "Backend Developer", "slug": "backend-developer" } },
+  { "model": "interview.role", "pk": 3, "fields": { "name": "Data Scientist", "slug": "data-scientist" } },
+  { "model": "interview.role", "pk": 4, "fields": { "name": "DevOps Engineer", "slug": "devops-engineer" } }
+]

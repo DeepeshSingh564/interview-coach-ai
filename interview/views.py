@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404, render
 import json
 import secrets
+from django.conf import settings
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_GET, require_POST
 from django.shortcuts import render, get_object_or_404
@@ -18,16 +19,13 @@ from .feedback_engine import score_answer
 # Create your views here.
 
 def home_view(request):
-    roles = Role.objects.all().values('id', 'name', 'slug')
-    print("Roles in home_view:", list(roles))  # Debug line
+    roles = Role.objects.all()
     return render(request, "interview/home.html", {"roles": roles})
 
 
 
-def interview_view(request, role_id):
-    print(f"interview_view called with role_id: {role_id}")  # Debug line
-    role = get_object_or_404(Role, id=role_id)
-    print(f"Found role: {role.name}")  # Debug line
+def interview_view(request,role_id):
+    role = get_object_or_404(Role, id=role_id)  # default to 1 if missing
     return render(request, "interview/interview.html", {"role": role})
 
 
@@ -36,14 +34,14 @@ def api_roles(request):
   roles = list(Role.objects.order_by('name').values('id', 'name', 'slug'))
   return JsonResponse({'roles': roles})
 
-@csrf_exempt
 @require_GET
 def api_questions(request, role_id):
     questions = list(Question.objects.filter(role_id=role_id).values('id', 'text', 'difficulty', 'keywords'))
     return JsonResponse({'questions': questions})  # Now returns a list of questions
 
 
-@csrf_exempt  # This should be removed once the frontend is using CSRF tokens
+
+@csrf_exempt
 @require_POST
 def api_answer(request):
     try:
@@ -52,34 +50,46 @@ def api_answer(request):
         question_id = payload.get("question_id")
         answer_text = payload.get("answer_text")
 
-        # Validation of the incoming data
         if session_id is None or question_id is None or answer_text is None:
             return HttpResponseBadRequest("Missing required fields.")
-
     except json.JSONDecodeError:
         return HttpResponseBadRequest("Invalid JSON format.")
 
-    # Get session
+        # Get session & question
     try:
         session = Session.objects.get(id=session_id)
     except Session.DoesNotExist:
         return HttpResponseBadRequest("Invalid session_id")
-    # Get question
     try:
         question = Question.objects.get(id=question_id)
     except Question.DoesNotExist:
         return HttpResponseBadRequest("Invalid question_id")
-    # Call AI to evaluate
-    result = ai_evaluate_answer(question.text, answer_text)
-    # Store attempt
+
+    # ✅ Decide evaluation method
+    if getattr(settings, "USE_AI", False):
+        try:
+            result = ai_evaluate_answer(question.text, answer_text)
+            score = result.get("score", 0)
+            feedback = result.get("feedback", "AI did not return feedback.")
+        except Exception as e:
+            # fallback if AI fails (quota, errors, etc.)
+            keywords = ["python", "django", "database"]  # TODO: fetch per-question keywords
+            score, feedback = score_answer(answer_text, keywords)
+    else:
+        # Use free heuristic feedback
+        keywords = ["python", "django", "database"]  # TODO: fetch per-question keywords
+        score, feedback = score_answer(answer_text, keywords)
+
+    # Save attempt
     attempt = Attempt.objects.create(
         session=session,
         question=question,
-        user_session=session.user_session,  # keep for reference
+        user_session=session.user_session,
         answer_text=answer_text,
-        feedback_text=result.get("feedback", ""),
-        score=result.get("score", 0),
+        feedback_text=feedback,
+        score=score,
     )
+
     return JsonResponse({
         "attempt_id": attempt.id,
         "session_id": session.id,
@@ -150,7 +160,6 @@ def api_answer_browsable(request):
         }, status=status.HTTP_201_CREATED)
 
 
-@csrf_exempt
 @require_POST
 def api_start_session(request):
     try:

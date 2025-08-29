@@ -1,33 +1,112 @@
 {% extends "base.html" %}
-
 {% block content %}
-<div class="container mt-4">
-    <h2>Interview for {{ role.name }}</h2>
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10 col-xl-8">
+            <!-- Header -->
+            <div class="text-center mb-5">
+                <h1 class="display-5 fw-bold text-primary mb-2">Interview for {{ role.name }}</h1>
+                <p class="lead text-muted">Answer questions and receive AI-powered feedback</p>
+            </div>
 
-    <!-- Progress bar -->
-    <div class="progress mb-3">
-        <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%">0%</div>
-    </div>
+            <!-- Progress Section -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="card-title mb-0">Your Progress</h5>
+                        <span class="text-muted" id="progress-text">0/0 questions answered</span>
+                    </div>
+                    <div class="progress mb-2" style="height: 20px;">
+                        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%;">0%</div>
+                    </div>
+                    <div id="completion-message" class="alert alert-success mt-3 mb-0" style="display:none;">
+                        <i class="fas fa-trophy me-2"></i> Interview Completed! Great job.
+                    </div>
+                </div>
+            </div>
 
-    <!-- Question box -->
-    <div id="question-box" class="card">
-        <div class="card-body">
-            <h5 id="question-text">Loading question...</h5>
-            <textarea id="answer" class="form-control mt-3" rows="4" placeholder="Type your answer here..."></textarea>
-            <button id="submit-answer" class="btn btn-primary mt-3">Submit</button>
-            <button id="stop-interview" class="btn btn-danger mt-3">Stop Interview</button>
+            <!-- Question Box -->
+            <div id="question-box" class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="card-title mb-0"><i class="fas fa-question-circle me-2 text-primary"></i>Current Question</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div id="question-text" class="fs-5 mb-4 p-3 bg-light rounded">Loading question...</div>
+                    <textarea id="answer" class="form-control p-3" rows="5" placeholder="Type your answer here..."></textarea>
+                    <div class="d-flex mt-4">
+                        <button id="submit-answer" class="btn btn-primary btn-lg me-2">
+                            <i class="fas fa-paper-plane me-2"></i> Submit Answer
+                        </button>
+                        <button id="stop-interview" class="btn btn-outline-danger btn-lg">
+                            <i class="fas fa-stop-circle me-2"></i> Stop Interview
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Feedback -->
+            <div id="feedback" class="card shadow-sm border-0 mb-4" style="display:none;">
+                <div class="card-header bg-white py-3">
+                    <h5 class="card-title mb-0"><i class="fas fa-comment-dots me-2 text-primary"></i> Feedback</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div id="feedback-content"></div>
+                </div>
+            </div>
+
+            <!-- Summary -->
+            <div id="summary" class="card shadow-sm border-0" style="display:none;">
+                <div class="card-header bg-white py-3">
+                    <h3 class="card-title mb-0"><i class="fas fa-clipboard-list me-2 text-primary"></i> Session Summary</h3>
+                </div>
+                <div class="card-body p-4">
+                    <div id="summary-list"></div>
+                    <div id="average-score" class="alert alert-info mt-3"></div>
+                </div>
+            </div>
         </div>
     </div>
-
-    <!-- Feedback -->
-    <div id="feedback" class="alert alert-info mt-3" style="display:none;"></div>
-
-    <!-- Summary -->
-    <div id="summary" class="mt-4" style="display:none;">
-        <h3>Session Summary</h3>
-        <ul id="summary-list"></ul>
-    </div>
 </div>
+
+<style>
+    body {
+        background-color: #f8f9fa;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    .card {
+        border-radius: 12px;
+    }
+    
+    .progress {
+        border-radius: 10px;
+    }
+    
+    .progress-bar {
+        border-radius: 10px;
+        transition: width 0.5s ease;
+    }
+    
+    .btn {
+        border-radius: 8px;
+        transition: all 0.3s;
+    }
+    
+    .btn:hover {
+        transform: translateY(-2px);
+    }
+    
+    #answer {
+        border-radius: 8px;
+        resize: vertical;
+    }
+    
+    #question-text {
+        line-height: 1.6;
+        border-left: 4px solid #4361ee;
+    }
+</style>
 
 <script>
 let questions = [];
@@ -147,6 +226,11 @@ async function submitAnswer() {
         answer_text: answer
     });
 
+    // Show loading state
+    const submitBtn = document.getElementById("submit-answer");
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Processing...';
+
     let res = await fetch("/api/answer/", {
         method: "POST",
         headers: {
@@ -164,13 +248,23 @@ async function submitAnswer() {
         let text = await res.text();
         console.error("Server error:", text);
         alert("Error from server: " + res.status);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i> Submit Answer';
         return;
     }
 
     let data = await res.json();
+    
+    // Show feedback with better formatting
+    const feedbackContent = document.getElementById("feedback-content");
+    feedbackContent.innerHTML = `
+        <div class="d-flex align-items-center mb-3">
+            <span class="badge bg-primary me-2">Score: ${data.score}/10</span>
+            <span class="text-muted">Question ${currentIndex + 1} of ${questions.length}</span>
+        </div>
+        <p class="mb-0">${data.feedback}</p>
+    `;
     document.getElementById("feedback").style.display = "block";
-    document.getElementById("feedback").innerText =
-        "Score: " + data.score + " | Feedback: " + data.feedback;
 
     attempts.push({
         question: questions[currentIndex].text,
@@ -179,17 +273,40 @@ async function submitAnswer() {
         feedback: data.feedback
     });
 
+    // Reset button state
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i> Submit Answer';
+
     currentIndex++;
-    setTimeout(showQuestion, 2000);
+    
+    // Scroll to feedback
+    document.getElementById("feedback").scrollIntoView({ behavior: 'smooth' });
+    
+    // Show next question after a delay
+    setTimeout(showQuestion, 2500);
 }
 
-// Update progress bar
+// Update progress bar - FIXED VERSION
 function updateProgress() {
     if (questions.length > 0) {
-        const percentage = Math.round((currentIndex / questions.length) * 100);
+        // FIXED: Changed from currentIndex to currentIndex + 1
+        let percentage = Math.round(((currentIndex + 1) / questions.length) * 100);
+        
+        // Ensure we don't exceed 100%
+        percentage = Math.min(percentage, 100);
+        
         const progressBar = document.getElementById("progress-bar");
         progressBar.style.width = percentage + "%";
         progressBar.innerText = percentage + "%";
+        
+        // Update progress text
+        document.getElementById("progress-text").innerText = 
+            `${currentIndex} of ${questions.length} questions answered`;
+        
+        // Show completion message when at 100%
+        if (percentage === 100) {
+            document.getElementById("completion-message").style.display = "block";
+        }
     }
 }
 
@@ -197,27 +314,33 @@ function updateProgress() {
 function endInterview() {
     document.getElementById("question-box").style.display = "none";
     document.getElementById("summary").style.display = "block";
+    document.getElementById("completion-message").style.display = "block";
     
     const summaryList = document.getElementById("summary-list");
     summaryList.innerHTML = "";
     
     attempts.forEach((attempt, index) => {
-        const listItem = document.createElement("li");
-        listItem.innerHTML = `
-            <strong>Q${index + 1}:</strong> ${attempt.question}<br>
-            <strong>Your Answer:</strong> ${attempt.answer}<br>
-            <strong>Score:</strong> ${attempt.score}/10<br>
-            <strong>Feedback:</strong> ${attempt.feedback}<br><br>
+        const summaryItem = document.createElement("div");
+        summaryItem.className = "mb-4 p-3 border rounded";
+        summaryItem.innerHTML = `
+            <h5>Question ${index + 1}: ${attempt.question}</h5>
+            <p class="mb-2"><strong>Your Answer:</strong> ${attempt.answer}</p>
+            <div class="d-flex align-items-center">
+                <span class="badge bg-info me-2">Score: ${attempt.score}/10</span>
+                <span><strong>Feedback:</strong> ${attempt.feedback}</span>
+            </div>
         `;
-        summaryList.appendChild(listItem);
+        summaryList.appendChild(summaryItem);
     });
     
     const avgScore = attempts.length > 0 ? 
         (attempts.reduce((sum, a) => sum + a.score, 0) / attempts.length).toFixed(1) : 0;
     
-    const avgItem = document.createElement("li");
-    avgItem.innerHTML = `<strong>Average Score: ${avgScore}/10</strong>`;
-    summaryList.appendChild(avgItem);
+    document.getElementById("average-score").innerHTML = 
+        `<i class="fas fa-star me-2"></i> <strong>Average Score: ${avgScore}/10</strong>`;
+    
+    // Scroll to summary
+    document.getElementById("summary").scrollIntoView({ behavior: 'smooth' });
 }
 
 // Initialize the interview

@@ -46,7 +46,7 @@ class Session(models.Model):
 
 
 class Attempt(models.Model):
-    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name="attempts")
+    session = models.ForeignKey(Session , on_delete=models.CASCADE, related_name="attempts")
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name="attempts")
     user_session = models.CharField(max_length=100)
     answer_text = models.TextField()

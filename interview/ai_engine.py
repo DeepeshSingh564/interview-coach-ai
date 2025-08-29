@@ -1,11 +1,10 @@
-# services/ai_engine.py
 import os
 import json
 import re
 import time
-import openai
+from openai import OpenAI  # ✅ new import
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 DEFAULT_MODEL = "gpt-4o-mini"  # use a small/cheap model for dev; change in prod
 
@@ -16,7 +15,6 @@ def _extract_json_block(text: str):
     """
     if not text:
         return None
-    # naive first-{ ... } match (works in most cases)
     m = re.search(r'(\{(?:.|\s)*\})', text, re.S)
     if not m:
         return None
@@ -24,7 +22,6 @@ def _extract_json_block(text: str):
     try:
         return json.loads(block)
     except json.JSONDecodeError:
-        # try a tolerant fix (replace single quotes)
         try:
             fixed = block.replace("'", '"')
             return json.loads(fixed)
@@ -63,7 +60,8 @@ INSTRUCTIONS (VERY IMPORTANT):
 
     for attempt in range(max_retries + 1):
         try:
-            resp = openai.ChatCompletion.create(
+            # ✅ updated call
+            resp = client.chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": "You are a helpful, objective AI interviewer."},
@@ -73,16 +71,14 @@ INSTRUCTIONS (VERY IMPORTANT):
                 max_tokens=400
             )
 
-            content = resp["choices"][0]["message"]["content"].strip()
+            content = resp.choices[0].message.content.strip()  # ✅ new access pattern
 
-            # Try direct parse
             try:
                 parsed = json.loads(content)
             except json.JSONDecodeError:
                 parsed = _extract_json_block(content)
 
             if not parsed:
-                # If parsing failed, return a guarded fallback structure including raw
                 return {
                     "strengths": [],
                     "weaknesses": [],
@@ -91,12 +87,10 @@ INSTRUCTIONS (VERY IMPORTANT):
                     "raw": content
                 }
 
-            # Clean and coerce score
             score = parsed.get("score", 0)
             try:
                 score = int(round(float(score)))
             except Exception:
-                # try to extract a number if score is messy
                 m = re.search(r"(\d+)", str(score))
                 score = int(m.group(1)) if m else 0
             score = max(0, min(10, score))
@@ -105,9 +99,7 @@ INSTRUCTIONS (VERY IMPORTANT):
             return parsed
 
         except Exception as e:
-            # Basic retry/backoff for transient errors
             if attempt < max_retries:
                 time.sleep(1 + attempt * 2)
                 continue
-            # last failure -> re-raise so caller can fallback to rule engine
             raise
